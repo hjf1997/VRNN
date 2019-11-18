@@ -11,6 +11,7 @@ import torch
 from utils import Progbar
 from model import VRNN
 from loss_function import loss as Loss
+from config import Config
 
 def load_dataset(batch_size):
     train_dataset = datasets.MNIST(root='../data/',
@@ -31,21 +32,21 @@ def load_dataset(batch_size):
                                               shuffle=False)
     return train_loader, test_loader
 
-if __name__ == '__main__':
+def train(conf):
 
-    x_dim, h_dim, z_dim = 28, 100, 16
-    epoch = 60
-    save_every = 10
     train_loader, test_loader = load_dataset(512)
-    net = VRNN(x_dim, h_dim, z_dim)
+    net = VRNN(conf.x_dim, conf.h_dim, conf.z_dim)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.cuda.manual_seed_all(112858)
     net.to(device)
     net = torch.nn.DataParallel(net, device_ids=[0, 1])
+    if conf.restore == True:
+        net.load_state_dict(torch.load(conf.checkpoint_path, map_location='cuda:0'))
+        print('Restore model from ' + conf.checkpoint_path)
     optimizer = optim.Adam(net.parameters(), lr=0.001)
-    for ep in range(1, epoch+1):
-        prog = Progbar(target=118)
-        print("At epoch:{}".format(str(epoch + 1)))
+    for ep in range(1, conf.train_epoch + 1):
+        prog = Progbar(target=117)
+        print("At epoch:{}".format(str(ep)))
         for i, (data, target) in enumerate(train_loader):
             data = data.squeeze(1)
             data = (data / 255).to(device)
@@ -55,17 +56,26 @@ if __name__ == '__main__':
             loss.backward()
             _ = torch.nn.utils.clip_grad_norm_(net.parameters(), 5)
             optimizer.step()
-            prog.update(i + 1, exact=[("Training Loss", loss.item())])
+            prog.update(i, exact=[("Training Loss", loss.item())])
 
         with torch.no_grad():
-            x_decoded = net.module.sampling(x_dim, device)
+            x_decoded = net.module.sampling(conf.x_dim, device)
             x_decoded = x_decoded.cpu().numpy()
-            digit = x_decoded.reshape(x_dim, x_dim)
+            digit = x_decoded.reshape(conf.x_dim, conf.x_dim)
             plt.imshow(digit, cmap='Greys_r')
             plt.pause(1e-6)
 
-        if ep % save_every == 0:
-            torch.save(net.state_dict(), './checkpoint/Epoch_' + str(epoch + 1) + '.pth')
+        if ep % conf.save_every == 0:
+            torch.save(net.state_dict(), '../checkpoint/Epoch_' + str(ep + 1) + '.pth')
+
+def generating(conf):
+
+    net = VRNN(conf.x_dim, conf.h_dim, conf.z_dim)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.to(device)
+    net = torch.nn.DataParallel(net, device_ids=conf.device_ids)
+    net.load_state_dict(torch.load(conf.checkpoint_path, map_location='cuda:0'))
+    print('Restore model from ' + conf.checkpoint_path)
 
     with torch.no_grad():
         n = 15  # figure with 15x15 digits
@@ -83,5 +93,16 @@ if __name__ == '__main__':
         plt.figure(figsize=(10, 10))
         plt.imshow(figure, cmap='Greys_r')
         plt.show()
+
+
+
+if __name__ == '__main__':
+
+    conf = Config()
+    train(conf)
+    generating(conf)
+
+
+
 
 
