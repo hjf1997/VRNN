@@ -16,7 +16,7 @@ The origin code is available at [Link]( https://github.com/jych/nips2015_vrnn ) 
 
 ## Results
 
-​	Generation results on MNIST dataset after 160 epochs:
+​	Generating results on MNIST dataset after 160 epoches:
   	![Fig](img1.png)  
   	![Fig](img2.png)  
   	![Fig](img3.png)  
